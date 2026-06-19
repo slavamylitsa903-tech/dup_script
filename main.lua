@@ -1,22 +1,26 @@
 -- =====================================================
--- SWILL DUP v8.0 FOR XENO (GROW: ETERNAL GARDEN)
--- РАБОТАЕТ: КНОПКИ, СВОРАЧИВАНИЕ, ДЮП ВСЕХ САЖЕНЦЕВ
+-- SWILL DUP v9.0 FOR GROW: ETERNAL GARDEN 2
+-- АВТОПОКУПКА СЕМЯН + ДЮП САЖЕНЦЕВ + СВОРАЧИВАНИЕ
 -- =====================================================
 
+-- =================== СЕРВИСЫ ==========================
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
-local Inventory = Player:FindFirstChild("Inventory") or Player:FindFirstChild("Backpack")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RemoteEvent = ReplicatedStorage:FindFirstChild("UpdateInventory") 
-                    or ReplicatedStorage:FindFirstChild("ItemEvent")
-                    or Player:FindFirstChild("PlayerGui"):FindFirstChild("Remote")
+local RunService = game:GetService("RunService")
 
--- =================== КОНФИГ ===========================
-local CONFIG = {
-    DupDelay = 0.12,
-    MaxCopies = 30,
-}
+-- =================== ПЕРЕМЕННЫЕ =======================
+local Inventory = Player:FindFirstChild("Inventory") or Player:FindFirstChild("Backpack")
+local RemoteEvent = nil
+if ReplicatedStorage then
+    RemoteEvent = ReplicatedStorage:FindFirstChild("UpdateInventory") 
+                  or ReplicatedStorage:FindFirstChild("ItemEvent")
+                  or ReplicatedStorage:FindFirstChild("Remote")
+end
+if not RemoteEvent then
+    RemoteEvent = Player:FindFirstChild("PlayerGui"):FindFirstChild("Remote")
+end
 
 -- =================== СОСТОЯНИЕ ========================
 local state = {
@@ -28,13 +32,16 @@ local state = {
     statusLabel = nil,
     progressLabel = nil,
     dupButton = nil,
+    buyButton = nil,
 }
 
--- =================== ФУНКЦИИ ПОИСКА САЖЕНЦЕВ ===========
+-- =================== ФУНКЦИИ ==========================
+
+-- ПОИСК САЖЕНЦЕВ
 local function isSapling(item)
     if not item then return false end
     local name = item.Name:lower()
-    local keywords = {"sapling", "seedling", "seed", "росток", "саженец", "sprout", "plant", "tree"}
+    local keywords = {"sapling", "seedling", "seed", "росток", "саженец", "sprout", "plant", "tree", "grow"}
     for _, kw in ipairs(keywords) do
         if name:find(kw) then return true end
     end
@@ -54,7 +61,53 @@ local function getAllSaplings()
     return list
 end
 
--- =================== ФУНКЦИЯ ДЮПА =====================
+-- ПОИСК МАГАЗИНА
+local function findShop()
+    for _, child in ipairs(workspace:GetChildren()) do
+        if child:IsA("Model") and (child.Name:lower():find("shop") or child.Name:lower():find("store") or child.Name:lower():find("market")) then
+            return child
+        end
+    end
+    return nil
+end
+
+-- АВТОПОКУПКА СЕМЯН
+local function buySeeds()
+    local shop = findShop()
+    if not shop then
+        state.statusLabel.Text = "❌ Магазин не найден!"
+        return
+    end
+    
+    local seedItem = nil
+    for _, child in ipairs(shop:GetChildren()) do
+        if child:IsA("Tool") or child:IsA("Item") then
+            if child.Name:lower():find("seed") or child.Name:lower():find("sem") then
+                seedItem = child
+                break
+            end
+        end
+    end
+    
+    if not seedItem then
+        state.statusLabel.Text = "❌ Семена не найдены в магазине!"
+        return
+    end
+    
+    -- Покупаем 10 раз (можно изменить)
+    local bought = 0
+    for i = 1, 10 do
+        if RemoteEvent then
+            RemoteEvent:FireServer({action = "buyItem", item = seedItem, count = 1})
+            bought = bought + 1
+            state.statusLabel.Text = "🛒 Куплено: " .. bought .. " семян"
+            wait(0.3)
+        end
+    end
+    state.statusLabel.Text = "✅ Куплено " .. bought .. " семян!"
+end
+
+-- ДЮП
 local function duplicateItem(item)
     if not item then return false end
     local clone = item:Clone()
@@ -72,7 +125,6 @@ local function duplicateItem(item)
     return true
 end
 
--- =================== ОСНОВНОЙ ДЮП =====================
 local function startDup()
     if state.isRunning then
         state.statusLabel.Text = "⏳ Уже работает!"
@@ -86,27 +138,25 @@ local function startDup()
     state.isRunning = true
     state.dupButton.Text = "⏳ Дюпаю..."
     state.dupButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    state.dupButton.Selectable = false
     state.statusLabel.Text = "🌱 Найдено: " .. #saplings .. ". Дюпаю..."
     
     task.spawn(function()
         local total = 0
         for i, sapling in ipairs(saplings) do
             if not state.isRunning then break end
-            for j = 1, CONFIG.MaxCopies do
+            for j = 1, 20 do -- по 20 копий на саженец
                 if not state.isRunning then break end
                 local ok = duplicateItem(sapling)
                 if ok then
                     total = total + 1
                     state.progressLabel.Text = "Скопировано: " .. total .. " | Обработано: " .. i .. "/" .. #saplings
                 end
-                wait(CONFIG.DupDelay)
+                wait(0.1)
             end
         end
         state.isRunning = false
         state.dupButton.Text = "🌱 Дюпнуть всё"
         state.dupButton.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
-        state.dupButton.Selectable = true
         state.statusLabel.Text = "✅ Готово! Создано копий: " .. total
         state.progressLabel.Text = "Саженцев: " .. #saplings .. " | Копий: " .. total
     end)
@@ -121,10 +171,10 @@ local function createGUI()
     screenGui.Parent = PlayerGui
     state.gui = screenGui
 
-    -- ОСНОВНОЕ ОКНО
+    -- ОСНОВНОЕ ОКНО (БОЛЬШЕ)
     local main = Instance.new("Frame")
-    main.Size = UDim2.new(0, 320, 0, 200)
-    main.Position = UDim2.new(0.5, -160, 0.5, -100)
+    main.Size = UDim2.new(0, 360, 0, 260)
+    main.Position = UDim2.new(0.5, -180, 0.5, -130)
     main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
     main.BorderSizePixel = 0
     main.Parent = screenGui
@@ -133,11 +183,6 @@ local function createGUI()
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 14)
     corner.Parent = main
-
-    local stroke = Instance.new("UIStroke")
-    stroke.Color = Color3.fromRGB(50, 50, 55)
-    stroke.Thickness = 1
-    stroke.Parent = main
 
     -- ШАПКА
     local header = Instance.new("Frame")
@@ -198,7 +243,7 @@ local function createGUI()
     status.Size = UDim2.new(1, -20, 0, 30)
     status.Position = UDim2.new(0, 10, 0, 50)
     status.BackgroundTransparency = 1
-    status.Text = "Готов к дюпу"
+    status.Text = "Готов к работе"
     status.TextColor3 = Color3.fromRGB(180, 180, 185)
     status.TextSize = 14
     status.Font = Enum.Font.Gotham
@@ -219,15 +264,32 @@ local function createGUI()
     progress.Parent = main
     state.progressLabel = progress
 
+    -- КНОПКА КУПИТЬ СЕМЕНА
+    local buyBtn = Instance.new("TextButton")
+    buyBtn.Size = UDim2.new(0.42, 0, 0, 40)
+    buyBtn.Position = UDim2.new(0.05, 0, 0.75, 0)
+    buyBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+    buyBtn.BorderSizePixel = 0
+    buyBtn.Text = "🛒 Купить семена"
+    buyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    buyBtn.TextSize = 14
+    buyBtn.Font = Enum.Font.GothamMedium
+    buyBtn.AutoButtonColor = false
+    buyBtn.Parent = main
+    state.buyButton = buyBtn
+    local buyCorner = Instance.new("UICorner")
+    buyCorner.CornerRadius = UDim.new(0, 10)
+    buyCorner.Parent = buyBtn
+
     -- КНОПКА ДЮПА
     local dup = Instance.new("TextButton")
-    dup.Size = UDim2.new(0.9, 0, 0, 45)
-    dup.Position = UDim2.new(0.05, 0, 1, -55)
+    dup.Size = UDim2.new(0.42, 0, 0, 40)
+    dup.Position = UDim2.new(0.53, 0, 0.75, 0)
     dup.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
     dup.BorderSizePixel = 0
     dup.Text = "🌱 Дюпнуть всё"
     dup.TextColor3 = Color3.fromRGB(255, 255, 255)
-    dup.TextSize = 16
+    dup.TextSize = 14
     dup.Font = Enum.Font.GothamMedium
     dup.AutoButtonColor = false
     dup.Parent = main
@@ -280,6 +342,10 @@ local function createGUI()
         state.gui = nil
     end)
 
+    buyBtn.MouseButton1Click:Connect(function()
+        buySeeds()
+    end)
+
     dup.MouseButton1Click:Connect(function()
         startDup()
     end)
@@ -291,4 +357,4 @@ end
 
 -- =================== ЗАПУСК ====================
 createGUI()
-print("[SWILL] ✅ GUI создан! Нажмите 'Дюпнуть всё' для старта.")
+print("[SWILL] ✅ GUI создан!")
