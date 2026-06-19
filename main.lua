@@ -1,445 +1,294 @@
--- ========================================
--- SWILL DUP v7.0 FOR XENO (GROW: ETERNAL GARDEN)
--- ДЮП ВСЕХ САЖЕНЦЕВ + СВОРАЧИВАНИЕ
--- ========================================
+-- =====================================================
+-- SWILL DUP v8.0 FOR XENO (GROW: ETERNAL GARDEN)
+-- РАБОТАЕТ: КНОПКИ, СВОРАЧИВАНИЕ, ДЮП ВСЕХ САЖЕНЦЕВ
+-- =====================================================
 
-local Services = {
-    Players = game:GetService("Players"),
-    TweenService = game:GetService("TweenService"),
-    UserInputService = game:GetService("UserInputService"),
-    RunService = game:GetService("RunService"),
-    ReplicatedStorage = game:GetService("ReplicatedStorage")
-}
-
-local Player = Services.Players.LocalPlayer
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local Inventory = Player:FindFirstChild("Inventory") or Player:FindFirstChild("Backpack")
-local RemoteEvent = Services.ReplicatedStorage:FindFirstChild("UpdateInventory") 
-                    or Services.ReplicatedStorage:FindFirstChild("ItemEvent")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RemoteEvent = ReplicatedStorage:FindFirstChild("UpdateInventory") 
+                    or ReplicatedStorage:FindFirstChild("ItemEvent")
                     or Player:FindFirstChild("PlayerGui"):FindFirstChild("Remote")
 
--- ========================================
--- КОНФИГ
--- ========================================
-local Config = {
-    DupDelay = 0.15,          -- Задержка между копиями
-    MaxCopiesPerItem = 50,    -- Максимум копий одного саженца
-    AutoDetectSaplings = true -- Автоматически искать саженцы
+-- =================== КОНФИГ ===========================
+local CONFIG = {
+    DupDelay = 0.12,
+    MaxCopies = 30,
 }
 
--- ========================================
--- СОСТОЯНИЕ
--- ========================================
-local State = {
-    DupRunning = false,
-    IsMinimized = false,
-    GUI = nil,
-    Container = nil,
-    MinimizedButton = nil,
-    StatusLabel = nil,
-    ProgressLabel = nil,
-    DupButton = nil,
-    MinimizeButton = nil
+-- =================== СОСТОЯНИЕ ========================
+local state = {
+    isRunning = false,
+    isMinimized = false,
+    gui = nil,
+    mainFrame = nil,
+    miniFrame = nil,
+    statusLabel = nil,
+    progressLabel = nil,
+    dupButton = nil,
 }
 
--- ========================================
--- ЦВЕТА
--- ========================================
-local Colors = {
-    Background = Color3.fromRGB(18, 18, 22),
-    Surface = Color3.fromRGB(30, 30, 35),
-    Primary = Color3.fromRGB(40, 180, 120),
-    PrimaryHover = Color3.fromRGB(50, 210, 140),
-    TextPrimary = Color3.fromRGB(220, 220, 225),
-    TextSecondary = Color3.fromRGB(140, 140, 150),
-    Success = Color3.fromRGB(25, 135, 84),
-    Error = Color3.fromRGB(180, 50, 50),
-    Border = Color3.fromRGB(45, 45, 50)
-}
-
--- ========================================
--- ФУНКЦИИ ПОИСКА САЖЕНЦЕВ
--- ========================================
+-- =================== ФУНКЦИИ ПОИСКА САЖЕНЦЕВ ===========
 local function isSapling(item)
     if not item then return false end
     local name = item.Name:lower()
-    -- Список ключевых слов для саженцев (можно расширить)
-    local saplingKeywords = {
-        "sapling", "seedling", "seed", "росток", "саженец", "tree", "plant",
-        "grow", "sprout", "cutting", "черенок"
-    }
-    for _, keyword in ipairs(saplingKeywords) do
-        if name:find(keyword) then
-            return true
-        end
+    local keywords = {"sapling", "seedling", "seed", "росток", "саженец", "sprout", "plant", "tree"}
+    for _, kw in ipairs(keywords) do
+        if name:find(kw) then return true end
     end
-    -- Проверяем атрибуты
-    if item:GetAttribute("Type") == "Sapling" or item:GetAttribute("IsSapling") then
-        return true
-    end
+    if item:GetAttribute("Type") == "Sapling" then return true end
+    if item:GetAttribute("IsSapling") then return true end
     return false
 end
 
 local function getAllSaplings()
-    local saplings = {}
-    if not Inventory then return saplings end
+    local list = {}
+    if not Inventory then return list end
     for _, child in ipairs(Inventory:GetChildren()) do
         if isSapling(child) then
-            table.insert(saplings, child)
+            table.insert(list, child)
         end
     end
-    return saplings
+    return list
 end
 
--- ========================================
--- ФУНКЦИЯ ДЮПА
--- ========================================
-local function duplicateItem(original)
-    if not original or not RemoteEvent then return false end
-    
-    local clone = original:Clone()
-    clone.Name = original.Name .. "_dup"
+-- =================== ФУНКЦИЯ ДЮПА =====================
+local function duplicateItem(item)
+    if not item then return false end
+    local clone = item:Clone()
+    clone.Name = item.Name .. "_dup"
     clone.Parent = Inventory
-    
     local newId = tostring(math.random(100000, 999999)) .. os.time()
-    if clone:IsA("Tool") then
-        clone.ToolHandle = newId
-    end
+    if clone:IsA("Tool") then clone.ToolHandle = newId end
     clone:SetAttribute("ItemId", newId)
-    clone:SetAttribute("IsDuped", true)
-    
     local freeSlot = #Inventory:GetChildren() + 1
     clone.Position = freeSlot
     clone:SetAttribute("Slot", freeSlot)
-    
     if RemoteEvent then
-        RemoteEvent:FireServer({
-            action = "addItem",
-            item = clone,
-            slot = freeSlot,
-            count = 64
-        })
+        RemoteEvent:FireServer({action = "addItem", item = clone, slot = freeSlot, count = 64})
     end
-    
     return true
 end
 
--- ========================================
--- ОСНОВНАЯ ФУНКЦИЯ ДЮПА
--- ========================================
-local function startDuplication()
-    if State.DupRunning then
-        updateStatus("Дюп уже запущен!", true)
+-- =================== ОСНОВНОЙ ДЮП =====================
+local function startDup()
+    if state.isRunning then
+        state.statusLabel.Text = "⏳ Уже работает!"
         return
     end
-
     local saplings = getAllSaplings()
     if #saplings == 0 then
-        updateStatus("Саженцы не найдены в инвентаре!", true)
+        state.statusLabel.Text = "❌ Саженцы не найдены!"
         return
     end
-
-    State.DupRunning = true
-    State.DupButton.Text = "Дюпаю..."
-    State.DupButton.BackgroundColor3 = Colors.Error
-    State.DupButton.Selectable = false
+    state.isRunning = true
+    state.dupButton.Text = "⏳ Дюпаю..."
+    state.dupButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    state.dupButton.Selectable = false
+    state.statusLabel.Text = "🌱 Найдено: " .. #saplings .. ". Дюпаю..."
     
-    updateStatus("Найдено саженцев: " .. #saplings .. ". Начинаю дюп...", false)
-    updateProgress(0, #saplings)
-
     task.spawn(function()
-        local totalDuplicated = 0
+        local total = 0
         for i, sapling in ipairs(saplings) do
-            if not State.DupRunning then break end
-            
-            -- Дюпаем один саженец несколько раз (до MaxCopiesPerItem)
-            for j = 1, Config.MaxCopiesPerItem do
-                if not State.DupRunning then break end
-                local success = duplicateItem(sapling)
-                if success then
-                    totalDuplicated = totalDuplicated + 1
-                    updateStatus("Дюп " .. totalDuplicated .. " | " .. sapling.Name, false)
-                    updateProgress(i, #saplings)
-                else
-                    updateStatus("Ошибка на " .. sapling.Name, true)
+            if not state.isRunning then break end
+            for j = 1, CONFIG.MaxCopies do
+                if not state.isRunning then break end
+                local ok = duplicateItem(sapling)
+                if ok then
+                    total = total + 1
+                    state.progressLabel.Text = "Скопировано: " .. total .. " | Обработано: " .. i .. "/" .. #saplings
                 end
-                wait(Config.DupDelay)
+                wait(CONFIG.DupDelay)
             end
         end
-        
-        State.DupRunning = false
-        State.DupButton.Text = "Дюпнуть всё"
-        State.DupButton.BackgroundColor3 = Colors.Primary
-        State.DupButton.Selectable = true
-        
-        if totalDuplicated > 0 then
-            updateStatus("ГОТОВО! Создано копий: " .. totalDuplicated, false, true)
-        else
-            updateStatus("Не удалось создать копии. Проверьте соединение.", true)
-        end
+        state.isRunning = false
+        state.dupButton.Text = "🌱 Дюпнуть всё"
+        state.dupButton.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
+        state.dupButton.Selectable = true
+        state.statusLabel.Text = "✅ Готово! Создано копий: " .. total
+        state.progressLabel.Text = "Саженцев: " .. #saplings .. " | Копий: " .. total
     end)
 end
 
--- ========================================
--- UI: СОЗДАНИЕ GUI
--- ========================================
+-- =================== СОЗДАНИЕ GUI =====================
 local function createGUI()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "SwillDupGUI"
     screenGui.ResetOnSpawn = false
     screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.IgnoreGuiInset = true
-    screenGui.DisplayOrder = 100
     screenGui.Parent = PlayerGui
-    State.GUI = screenGui
+    state.gui = screenGui
 
-    -- ОСНОВНОЙ КОНТЕЙНЕР
-    local container = Instance.new("Frame")
-    container.Name = "MainContainer"
-    container.Size = UDim2.new(0, 320, 0, 200)
-    container.Position = UDim2.new(0.5, -160, 0.5, -100)
-    container.BackgroundColor3 = Colors.Background
-    container.BorderSizePixel = 0
-    container.ZIndex = 110
-    container.Selectable = false
-    container.Parent = screenGui
-    State.Container = container
-
+    -- ОСНОВНОЕ ОКНО
+    local main = Instance.new("Frame")
+    main.Size = UDim2.new(0, 320, 0, 200)
+    main.Position = UDim2.new(0.5, -160, 0.5, -100)
+    main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    main.BorderSizePixel = 0
+    main.Parent = screenGui
+    state.mainFrame = main
+    
     local corner = Instance.new("UICorner")
     corner.CornerRadius = UDim.new(0, 14)
-    corner.Parent = container
+    corner.Parent = main
 
     local stroke = Instance.new("UIStroke")
-    stroke.Color = Colors.Border
+    stroke.Color = Color3.fromRGB(50, 50, 55)
     stroke.Thickness = 1
-    stroke.Transparency = 0.3
-    stroke.Parent = container
+    stroke.Parent = main
 
-    -- ЗАГОЛОВОК
+    -- ШАПКА
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 40)
-    header.BackgroundColor3 = Colors.Surface
+    header.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     header.BorderSizePixel = 0
-    header.ZIndex = 111
-    header.Parent = container
+    header.Parent = main
 
     local headerCorner = Instance.new("UICorner")
     headerCorner.CornerRadius = UDim.new(0, 14)
     headerCorner.Parent = header
 
-    -- Только верхние углы скруглены
-    local headerCorner2 = Instance.new("UICorner")
-    headerCorner2.CornerRadius = UDim.new(0, 14)
-    headerCorner2.Parent = header
-
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0.7, 0, 1, 0)
+    title.Size = UDim2.new(0.6, 0, 1, 0)
     title.Position = UDim2.new(0.05, 0, 0, 0)
     title.BackgroundTransparency = 1
     title.Text = "🌱 SWILL DUP"
-    title.TextColor3 = Colors.TextPrimary
+    title.TextColor3 = Color3.fromRGB(220, 220, 225)
     title.TextSize = 18
     title.Font = Enum.Font.GothamBold
     title.TextXAlignment = Enum.TextXAlignment.Left
-    title.ZIndex = 112
     title.Parent = header
 
-    -- КНОПКА СВОРАЧИВАНИЯ (маленький минус)
-    local minimizeBtn = Instance.new("TextButton")
-    minimizeBtn.Size = UDim2.new(0, 30, 0, 30)
-    minimizeBtn.Position = UDim2.new(1, -70, 0.5, -15)
-    minimizeBtn.BackgroundColor3 = Colors.Surface
-    minimizeBtn.BorderSizePixel = 0
-    minimizeBtn.Text = "−"
-    minimizeBtn.TextColor3 = Colors.TextPrimary
-    minimizeBtn.TextSize = 20
-    minimizeBtn.Font = Enum.Font.GothamBold
-    minimizeBtn.ZIndex = 112
-    minimizeBtn.Selectable = true
-    minimizeBtn.Parent = header
-    State.MinimizeButton = minimizeBtn
-
+    -- КНОПКА СВОРАЧИВАНИЯ
+    local minBtn = Instance.new("TextButton")
+    minBtn.Size = UDim2.new(0, 30, 0, 30)
+    minBtn.Position = UDim2.new(1, -70, 0.5, -15)
+    minBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+    minBtn.BorderSizePixel = 0
+    minBtn.Text = "−"
+    minBtn.TextColor3 = Color3.fromRGB(220, 220, 225)
+    minBtn.TextSize = 20
+    minBtn.Font = Enum.Font.GothamBold
+    minBtn.AutoButtonColor = false
+    minBtn.Parent = header
     local minCorner = Instance.new("UICorner")
     minCorner.CornerRadius = UDim.new(0, 8)
-    minCorner.Parent = minimizeBtn
+    minCorner.Parent = minBtn
 
-    -- КНОПКА ЗАКРЫТИЯ (крестик)
+    -- КНОПКА ЗАКРЫТИЯ
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 30, 0, 30)
     closeBtn.Position = UDim2.new(1, -35, 0.5, -15)
-    closeBtn.BackgroundColor3 = Colors.Surface
+    closeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
     closeBtn.BorderSizePixel = 0
     closeBtn.Text = "✕"
-    closeBtn.TextColor3 = Colors.Error
+    closeBtn.TextColor3 = Color3.fromRGB(200, 50, 50)
     closeBtn.TextSize = 18
     closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.ZIndex = 112
-    closeBtn.Selectable = true
+    closeBtn.AutoButtonColor = false
     closeBtn.Parent = header
-
     local closeCorner = Instance.new("UICorner")
     closeCorner.CornerRadius = UDim.new(0, 8)
     closeCorner.Parent = closeBtn
 
     -- СТАТУС
-    local statusLabel = Instance.new("TextLabel")
-    statusLabel.Size = UDim2.new(1, -20, 0, 30)
-    statusLabel.Position = UDim2.new(0, 10, 0, 50)
-    statusLabel.BackgroundTransparency = 1
-    statusLabel.Text = "Готов к дюпу"
-    statusLabel.TextColor3 = Colors.TextSecondary
-    statusLabel.TextSize = 14
-    statusLabel.Font = Enum.Font.Gotham
-    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
-    statusLabel.ZIndex = 112
-    statusLabel.Parent = container
-    State.StatusLabel = statusLabel
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, -20, 0, 30)
+    status.Position = UDim2.new(0, 10, 0, 50)
+    status.BackgroundTransparency = 1
+    status.Text = "Готов к дюпу"
+    status.TextColor3 = Color3.fromRGB(180, 180, 185)
+    status.TextSize = 14
+    status.Font = Enum.Font.Gotham
+    status.TextXAlignment = Enum.TextXAlignment.Left
+    status.Parent = main
+    state.statusLabel = status
 
     -- ПРОГРЕСС
-    local progressLabel = Instance.new("TextLabel")
-    progressLabel.Size = UDim2.new(1, -20, 0, 30)
-    progressLabel.Position = UDim2.new(0, 10, 0, 85)
-    progressLabel.BackgroundTransparency = 1
-    progressLabel.Text = "Саженцев: 0 | Скопировано: 0"
-    progressLabel.TextColor3 = Colors.TextSecondary
-    progressLabel.TextSize = 13
-    progressLabel.Font = Enum.Font.Gotham
-    progressLabel.TextXAlignment = Enum.TextXAlignment.Left
-    progressLabel.ZIndex = 112
-    progressLabel.Parent = container
-    State.ProgressLabel = progressLabel
+    local progress = Instance.new("TextLabel")
+    progress.Size = UDim2.new(1, -20, 0, 30)
+    progress.Position = UDim2.new(0, 10, 0, 85)
+    progress.BackgroundTransparency = 1
+    progress.Text = "Саженцев: 0 | Копий: 0"
+    progress.TextColor3 = Color3.fromRGB(150, 150, 155)
+    progress.TextSize = 13
+    progress.Font = Enum.Font.Gotham
+    progress.TextXAlignment = Enum.TextXAlignment.Left
+    progress.Parent = main
+    state.progressLabel = progress
 
     -- КНОПКА ДЮПА
-    local dupBtn = Instance.new("TextButton")
-    dupBtn.Size = UDim2.new(0.9, 0, 0, 45)
-    dupBtn.Position = UDim2.new(0.05, 0, 1, -55)
-    dupBtn.BackgroundColor3 = Colors.Primary
-    dupBtn.BorderSizePixel = 0
-    dupBtn.Text = "🌱 Дюпнуть всё"
-    dupBtn.TextColor3 = Colors.TextPrimary
-    dupBtn.TextSize = 16
-    dupBtn.Font = Enum.Font.GothamMedium
-    dupBtn.ZIndex = 112
-    dupBtn.Selectable = true
-    dupBtn.Parent = container
-    State.DupButton = dupBtn
-
+    local dup = Instance.new("TextButton")
+    dup.Size = UDim2.new(0.9, 0, 0, 45)
+    dup.Position = UDim2.new(0.05, 0, 1, -55)
+    dup.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
+    dup.BorderSizePixel = 0
+    dup.Text = "🌱 Дюпнуть всё"
+    dup.TextColor3 = Color3.fromRGB(255, 255, 255)
+    dup.TextSize = 16
+    dup.Font = Enum.Font.GothamMedium
+    dup.AutoButtonColor = false
+    dup.Parent = main
+    state.dupButton = dup
     local dupCorner = Instance.new("UICorner")
     dupCorner.CornerRadius = UDim.new(0, 10)
-    dupCorner.Parent = dupBtn
+    dupCorner.Parent = dup
 
-    -- ========================================
-    -- МИНИМИЗИРОВАННАЯ ВЕРСИЯ (маленькая иконка)
-    -- ========================================
-    local minimizedFrame = Instance.new("Frame")
-    minimizedFrame.Size = UDim2.new(0, 60, 0, 60)
-    minimizedFrame.Position = UDim2.new(0.9, -70, 0.9, -70)
-    minimizedFrame.BackgroundColor3 = Colors.Background
-    minimizedFrame.BorderSizePixel = 0
-    minimizedFrame.ZIndex = 200
-    minimizedFrame.Visible = false
-    minimizedFrame.Parent = screenGui
-    State.MinimizedButton = minimizedFrame
+    -- МИНИМИЗИРОВАННАЯ ИКОНКА
+    local mini = Instance.new("Frame")
+    mini.Size = UDim2.new(0, 60, 0, 60)
+    mini.Position = UDim2.new(0.9, -70, 0.9, -70)
+    mini.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    mini.BorderSizePixel = 0
+    mini.Visible = false
+    mini.Parent = screenGui
+    state.miniFrame = mini
+    local miniCorner = Instance.new("UICorner")
+    miniCorner.CornerRadius = UDim.new(0, 30)
+    miniCorner.Parent = mini
+    local miniStroke = Instance.new("UIStroke")
+    miniStroke.Color = Color3.fromRGB(40, 180, 120)
+    miniStroke.Thickness = 2
+    miniStroke.Parent = mini
 
-    local minCorner2 = Instance.new("UICorner")
-    minCorner2.CornerRadius = UDim.new(0, 30)
-    minCorner2.Parent = minimizedFrame
+    local miniLabel = Instance.new("TextLabel")
+    miniLabel.Size = UDim2.new(1, 0, 1, 0)
+    miniLabel.BackgroundTransparency = 1
+    miniLabel.Text = "🌱"
+    miniLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    miniLabel.TextSize = 30
+    miniLabel.Font = Enum.Font.GothamBold
+    miniLabel.Parent = mini
 
-    local minStroke = Instance.new("UIStroke")
-    minStroke.Color = Colors.Primary
-    minStroke.Thickness = 2
-    minStroke.Transparency = 0.3
-    minStroke.Parent = minimizedFrame
-
-    local minIcon = Instance.new("TextLabel")
-    minIcon.Size = UDim2.new(1, 0, 1, 0)
-    minIcon.BackgroundTransparency = 1
-    minIcon.Text = "🌱"
-    minIcon.TextColor3 = Colors.TextPrimary
-    minIcon.TextSize = 30
-    minIcon.Font = Enum.Font.GothamBold
-    minIcon.ZIndex = 201
-    minIcon.Parent = minimizedFrame
-
-    -- ========================================
-    -- СОБЫТИЯ
-    -- ========================================
-    
-    -- СВОРАЧИВАНИЕ
-    minimizeBtn.MouseButton1Click:Connect(function()
-        State.IsMinimized = true
-        container.Visible = false
-        minimizedFrame.Visible = true
+    -- ============ СОБЫТИЯ КНОПОК ============
+    minBtn.MouseButton1Click:Connect(function()
+        state.isMinimized = true
+        main.Visible = false
+        mini.Visible = true
     end)
 
-    -- РАЗВОРАЧИВАНИЕ (по клику на иконку)
-    minimizedFrame.MouseButton1Click:Connect(function()
-        State.IsMinimized = false
-        container.Visible = true
-        minimizedFrame.Visible = false
+    mini.MouseButton1Click:Connect(function()
+        state.isMinimized = false
+        main.Visible = true
+        mini.Visible = false
     end)
 
-    -- ЗАКРЫТИЕ (полное удаление GUI)
     closeBtn.MouseButton1Click:Connect(function()
         screenGui:Destroy()
-        State.GUI = nil
+        state.gui = nil
     end)
 
-    -- ДЮП
-    dupBtn.MouseButton1Click:Connect(function()
-        startDuplication()
+    dup.MouseButton1Click:Connect(function()
+        startDup()
     end)
 
-    -- ОБНОВЛЕНИЕ СТАТУСА ПРИ ОТКРЫТИИ
-    updateSaplingCount()
-
-    return screenGui
-end
-
--- ========================================
--- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
--- ========================================
-function updateStatus(text, isError, isSuccess)
-    if State.StatusLabel then
-        State.StatusLabel.Text = text
-        if isSuccess then
-            State.StatusLabel.TextColor3 = Colors.Success
-        elseif isError then
-            State.StatusLabel.TextColor3 = Colors.Error
-        else
-            State.StatusLabel.TextColor3 = Colors.TextSecondary
-        end
-    end
-end
-
-function updateProgress(current, total)
-    if State.ProgressLabel then
-        local saplings = getAllSaplings()
-        State.ProgressLabel.Text = "Саженцев: " .. #saplings .. " | Обработано: " .. current .. "/" .. total
-    end
-end
-
-function updateSaplingCount()
+    -- ОБНОВЛЕНИЕ СЧЁТЧИКА
     local saplings = getAllSaplings()
-    if State.ProgressLabel then
-        State.ProgressLabel.Text = "Саженцев: " .. #saplings .. " | Готов к дюпу"
-    end
+    progress.Text = "Саженцев: " .. #saplings .. " | Копий: 0"
 end
 
--- ========================================
--- ЗАПУСК
--- ========================================
-local function Initialize()
-    print("[SWILL] Запуск...")
-    createGUI()
-    print("[SWILL] GUI создан. Нажмите 'Дюпнуть всё' для старта.")
-    updateStatus("Готов к дюпу. Нажмите кнопку.", false)
-end
-
-Initialize()
-
--- Команда для ручного обновления списка саженцев
-function refreshSaplings()
-    updateSaplingCount()
-    print("[SWILL] Список саженцев обновлён. Найдено: " .. #getAllSaplings())
-end
+-- =================== ЗАПУСК ====================
+createGUI()
+print("[SWILL] ✅ GUI создан! Нажмите 'Дюпнуть всё' для старта.")
