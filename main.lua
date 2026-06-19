@@ -1,135 +1,65 @@
 -- ===========================================
--- SWILL DUP v11.0 (БЕЗ REMOTE)
--- РАБОТАЕТ ВСЕГДА
+-- SWILL DUP v12.0 (СБРОС ПОЗИЦИИ)
+-- ПРОСТО И РАБОТАЕТ
 -- ===========================================
 
 local Player = game.Players.LocalPlayer
 local Inventory = Player:FindFirstChild("Inventory") or Player:FindFirstChild("Backpack")
-local PlayerGui = Player:WaitForChild("PlayerGui")
 
--- СОЗДАЁМ ГЛАВНОЕ ОКНО
-local gui = Instance.new("ScreenGui")
-gui.Name = "SWILL_DUP"
-gui.Parent = PlayerGui
-
-local main = Instance.new("Frame")
-main.Size = UDim2.new(0, 280, 0, 150)
-main.Position = UDim2.new(0.5, -140, 0.5, -75)
-main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-main.BorderSizePixel = 0
-main.Parent = gui
-Instance.new("UICorner").Parent = main
-
-local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 30)
-title.Position = UDim2.new(0, 0, 0, 5)
-title.BackgroundTransparency = 1
-title.Text = "🌱 SWILL DUP v11"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 18
-title.Font = Enum.Font.GothamBold
-title.TextXAlignment = Enum.TextXAlignment.Center
-title.Parent = main
-
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -20, 0, 25)
-status.Position = UDim2.new(0, 10, 0, 40)
-status.BackgroundTransparency = 1
-status.Text = "Нажмите кнопку"
-status.TextColor3 = Color3.fromRGB(200, 200, 200)
-status.TextSize = 13
-status.Font = Enum.Font.Gotham
-status.TextXAlignment = Enum.TextXAlignment.Left
-status.Parent = main
-
--- КНОПКА ДЮПА
-local dupBtn = Instance.new("TextButton")
-dupBtn.Size = UDim2.new(0.9, 0, 0, 40)
-dupBtn.Position = UDim2.new(0.05, 0, 0.7, 0)
-dupBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
-dupBtn.BorderSizePixel = 0
-dupBtn.Text = "🌱 ДЮПНУТЬ ВСЁ"
-dupBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-dupBtn.TextSize = 16
-dupBtn.Font = Enum.Font.GothamMedium
-dupBtn.AutoButtonColor = false
-dupBtn.Parent = main
-Instance.new("UICorner").Parent = dupBtn
-
--- КНОПКА ЗАКРЫТЬ
-local closeBtn = Instance.new("TextButton")
-closeBtn.Size = UDim2.new(0, 30, 0, 30)
-closeBtn.Position = UDim2.new(1, -35, 0, 0)
-closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-closeBtn.BorderSizePixel = 0
-closeBtn.Text = "✕"
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-closeBtn.TextSize = 16
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.AutoButtonColor = false
-closeBtn.Parent = main
-Instance.new("UICorner").Parent = closeBtn
-
--- ============== ОСНОВНАЯ ЛОГИКА ДЮПА ==============
-
-local function duplicateItems()
-    status.Text = "⏳ Ищу предметы..."
-    wait(0.5)
+local function simpleDup()
+    print("[SWILL] Начинаю дуп...")
+    local count = 0
     
-    local items = {}
     for _, item in ipairs(Inventory:GetChildren()) do
-        if item:IsA("Tool") or item:IsA("Item") or item:IsA("Model") then
-            table.insert(items, item)
+        if item:IsA("Tool") or item:IsA("Item") then
+            -- Сохраняем позицию
+            local pos = item.Position
+            local name = item.Name
+            
+            -- Удаляем предмет
+            item:Destroy()
+            wait(0.1)
+            
+            -- Создаём новый с тем же именем
+            local newItem = Instance.new("Tool")
+            newItem.Name = name .. "_dup"
+            newItem.Parent = Inventory
+            newItem.Position = pos + Vector3.new(0, 0, 0.5)
+            
+            count = count + 1
+            print("[SWILL] Дюп: " .. name)
+            wait(0.05)
         end
     end
     
-    if #items == 0 then
-        status.Text = "❌ Нет предметов в инвентаре"
-        return
-    end
-    
-    status.Text = "⏳ Дюпаю " .. #items .. " предметов..."
-    wait(0.5)
-    
-    local total = 0
-    for i, item in ipairs(items) do
-        -- Метод 1: Клонирование через родителя
-        local clone = item:Clone()
-        clone.Name = item.Name .. "_copy_" .. i
-        clone.Parent = Inventory
-        
-        -- Метод 2: Перемещение туда-сюда (триггерит сохранение)
-        wait(0.05)
-        clone.Parent = nil
-        wait(0.05)
-        clone.Parent = Inventory
-        
-        total = total + 1
-        status.Text = "⏳ Скопировано: " .. total .. "/" .. #items
-        
-        wait(0.1)
-    end
-    
-    status.Text = "✅ ГОТОВО! Скопировано: " .. total
-    print("[SWILL] Создано копий: " .. total)
+    print("[SWILL] ГОТОВО! Создано " .. count .. " копий")
 end
 
--- ============== СОБЫТИЯ ==============
+-- Простое окно с кнопкой
+local gui = Instance.new("ScreenGui")
+gui.Parent = Player.PlayerGui
 
-dupBtn.MouseButton1Click:Connect(function()
-    dupBtn.Text = "⏳ ДЮПАЮ..."
-    dupBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    dupBtn.Selectable = false
+local btn = Instance.new("TextButton")
+btn.Size = UDim2.new(0, 200, 0, 50)
+btn.Position = UDim2.new(0.5, -100, 0.5, -25)
+btn.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
+btn.Text = "🌱 ДЮП"
+btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+btn.TextSize = 18
+btn.Font = Enum.Font.GothamBold
+btn.Parent = gui
+Instance.new("UICorner").Parent = btn
+
+btn.MouseButton1Click:Connect(function()
+    btn.Text = "⏳ ДЮПАЮ..."
+    btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    btn.Selectable = false
     
-    duplicateItems()
+    simpleDup()
     
-    dupBtn.Text = "🌱 ДЮПНУТЬ ВСЁ"
-    dupBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
-    dupBtn.Selectable = true
+    btn.Text = "🌱 ДЮП"
+    btn.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
+    btn.Selectable = true
 end)
 
-closeBtn.MouseButton1Click:Connect(function()
-    gui:Destroy()
-end)
-
-print("[SWILL] ✅ Скрипт загружен! Нажмите кнопку.")
+print("[SWILL] Нажмите кнопку ДЮП")
