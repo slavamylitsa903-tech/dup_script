@@ -3,26 +3,18 @@
 -- АВТОПОКУПКА СЕМЯН + ДЮП САЖЕНЦЕВ + СВОРАЧИВАНИЕ
 -- =====================================================
 
--- =================== СЕРВИСЫ ==========================
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
 
--- =================== ПЕРЕМЕННЫЕ =======================
 local Inventory = Player:FindFirstChild("Inventory") or Player:FindFirstChild("Backpack")
-local RemoteEvent = nil
-if ReplicatedStorage then
-    RemoteEvent = ReplicatedStorage:FindFirstChild("UpdateInventory") 
-                  or ReplicatedStorage:FindFirstChild("ItemEvent")
-                  or ReplicatedStorage:FindFirstChild("Remote")
-end
-if not RemoteEvent then
-    RemoteEvent = Player:FindFirstChild("PlayerGui"):FindFirstChild("Remote")
-end
+local RemoteEvent = ReplicatedStorage:FindFirstChild("UpdateInventory") 
+                    or ReplicatedStorage:FindFirstChild("ItemEvent")
+                    or ReplicatedStorage:FindFirstChild("Remote")
+                    or Player:FindFirstChild("PlayerGui"):FindFirstChild("Remote")
 
--- =================== СОСТОЯНИЕ ========================
 local state = {
     isRunning = false,
     isMinimized = false,
@@ -35,9 +27,7 @@ local state = {
     buyButton = nil,
 }
 
--- =================== ФУНКЦИИ ==========================
-
--- ПОИСК САЖЕНЦЕВ
+-- =================== ПОИСК САЖЕНЦЕВ ===================
 local function isSapling(item)
     if not item then return false end
     local name = item.Name:lower()
@@ -61,19 +51,19 @@ local function getAllSaplings()
     return list
 end
 
--- ПОИСК МАГАЗИНА
-local function findShop()
-    for _, child in ipairs(workspace:GetChildren()) do
-        if child:IsA("Model") and (child.Name:lower():find("shop") or child.Name:lower():find("store") or child.Name:lower():find("market")) then
-            return child
+-- =================== АВТОПОКУПКА СЕМЯН ===================
+local function buySeeds()
+    local shop = nil
+    for _, child in ipairs(Workspace:GetChildren()) do
+        if child:IsA("Model") then
+            local name = child.Name:lower()
+            if name:find("shop") or name:find("store") or name:find("market") or name:find("магазин") then
+                shop = child
+                break
+            end
         end
     end
-    return nil
-end
-
--- АВТОПОКУПКА СЕМЯН
-local function buySeeds()
-    local shop = findShop()
+    
     if not shop then
         state.statusLabel.Text = "❌ Магазин не найден!"
         return
@@ -81,8 +71,9 @@ local function buySeeds()
     
     local seedItem = nil
     for _, child in ipairs(shop:GetChildren()) do
-        if child:IsA("Tool") or child:IsA("Item") then
-            if child.Name:lower():find("seed") or child.Name:lower():find("sem") then
+        if child:IsA("Tool") or child:IsA("Item") or child:IsA("Model") then
+            local name = child.Name:lower()
+            if name:find("seed") or name:find("sem") or name:find("саженец") or name:find("росток") then
                 seedItem = child
                 break
             end
@@ -94,7 +85,6 @@ local function buySeeds()
         return
     end
     
-    -- Покупаем 10 раз (можно изменить)
     local bought = 0
     for i = 1, 10 do
         if RemoteEvent then
@@ -105,9 +95,11 @@ local function buySeeds()
         end
     end
     state.statusLabel.Text = "✅ Куплено " .. bought .. " семян!"
+    local saplings = getAllSaplings()
+    state.progressLabel.Text = "Саженцев: " .. #saplings .. " | Копий: 0"
 end
 
--- ДЮП
+-- =================== ДЮП ===================
 local function duplicateItem(item)
     if not item then return false end
     local clone = item:Clone()
@@ -132,7 +124,7 @@ local function startDup()
     end
     local saplings = getAllSaplings()
     if #saplings == 0 then
-        state.statusLabel.Text = "❌ Саженцы не найдены!"
+        state.statusLabel.Text = "❌ Саженцы не найдены! Купите семена."
         return
     end
     state.isRunning = true
@@ -144,7 +136,7 @@ local function startDup()
         local total = 0
         for i, sapling in ipairs(saplings) do
             if not state.isRunning then break end
-            for j = 1, 20 do -- по 20 копий на саженец
+            for j = 1, 20 do
                 if not state.isRunning then break end
                 local ok = duplicateItem(sapling)
                 if ok then
@@ -162,7 +154,7 @@ local function startDup()
     end)
 end
 
--- =================== СОЗДАНИЕ GUI =====================
+-- =================== СОЗДАНИЕ GUI ===================
 local function createGUI()
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "SwillDupGUI"
@@ -171,7 +163,6 @@ local function createGUI()
     screenGui.Parent = PlayerGui
     state.gui = screenGui
 
-    -- ОСНОВНОЕ ОКНО (БОЛЬШЕ)
     local main = Instance.new("Frame")
     main.Size = UDim2.new(0, 360, 0, 260)
     main.Position = UDim2.new(0.5, -180, 0.5, -130)
@@ -184,7 +175,6 @@ local function createGUI()
     corner.CornerRadius = UDim.new(0, 14)
     corner.Parent = main
 
-    -- ШАПКА
     local header = Instance.new("Frame")
     header.Size = UDim2.new(1, 0, 0, 40)
     header.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
@@ -206,7 +196,6 @@ local function createGUI()
     title.TextXAlignment = Enum.TextXAlignment.Left
     title.Parent = header
 
-    -- КНОПКА СВОРАЧИВАНИЯ
     local minBtn = Instance.new("TextButton")
     minBtn.Size = UDim2.new(0, 30, 0, 30)
     minBtn.Position = UDim2.new(1, -70, 0.5, -15)
@@ -222,7 +211,6 @@ local function createGUI()
     minCorner.CornerRadius = UDim.new(0, 8)
     minCorner.Parent = minBtn
 
-    -- КНОПКА ЗАКРЫТИЯ
     local closeBtn = Instance.new("TextButton")
     closeBtn.Size = UDim2.new(0, 30, 0, 30)
     closeBtn.Position = UDim2.new(1, -35, 0.5, -15)
@@ -238,7 +226,6 @@ local function createGUI()
     closeCorner.CornerRadius = UDim.new(0, 8)
     closeCorner.Parent = closeBtn
 
-    -- СТАТУС
     local status = Instance.new("TextLabel")
     status.Size = UDim2.new(1, -20, 0, 30)
     status.Position = UDim2.new(0, 10, 0, 50)
@@ -251,7 +238,6 @@ local function createGUI()
     status.Parent = main
     state.statusLabel = status
 
-    -- ПРОГРЕСС
     local progress = Instance.new("TextLabel")
     progress.Size = UDim2.new(1, -20, 0, 30)
     progress.Position = UDim2.new(0, 10, 0, 85)
@@ -264,7 +250,6 @@ local function createGUI()
     progress.Parent = main
     state.progressLabel = progress
 
-    -- КНОПКА КУПИТЬ СЕМЕНА
     local buyBtn = Instance.new("TextButton")
     buyBtn.Size = UDim2.new(0.42, 0, 0, 40)
     buyBtn.Position = UDim2.new(0.05, 0, 0.75, 0)
@@ -281,7 +266,6 @@ local function createGUI()
     buyCorner.CornerRadius = UDim.new(0, 10)
     buyCorner.Parent = buyBtn
 
-    -- КНОПКА ДЮПА
     local dup = Instance.new("TextButton")
     dup.Size = UDim2.new(0.42, 0, 0, 40)
     dup.Position = UDim2.new(0.53, 0, 0.75, 0)
@@ -298,7 +282,6 @@ local function createGUI()
     dupCorner.CornerRadius = UDim.new(0, 10)
     dupCorner.Parent = dup
 
-    -- МИНИМИЗИРОВАННАЯ ИКОНКА
     local mini = Instance.new("Frame")
     mini.Size = UDim2.new(0, 60, 0, 60)
     mini.Position = UDim2.new(0.9, -70, 0.9, -70)
@@ -324,7 +307,6 @@ local function createGUI()
     miniLabel.Font = Enum.Font.GothamBold
     miniLabel.Parent = mini
 
-    -- ============ СОБЫТИЯ КНОПОК ============
     minBtn.MouseButton1Click:Connect(function()
         state.isMinimized = true
         main.Visible = false
@@ -350,11 +332,9 @@ local function createGUI()
         startDup()
     end)
 
-    -- ОБНОВЛЕНИЕ СЧЁТЧИКА
     local saplings = getAllSaplings()
     progress.Text = "Саженцев: " .. #saplings .. " | Копий: 0"
 end
 
--- =================== ЗАПУСК ====================
 createGUI()
-print("[SWILL] ✅ GUI создан!")
+print("[SWILL] ✅ GUI создан! Нажмите 'Купить семена' или 'Дюпнуть всё'.")
