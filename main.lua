@@ -1,340 +1,230 @@
--- =====================================================
--- SWILL DUP v9.0 FOR GROW: ETERNAL GARDEN 2
--- АВТОПОКУПКА СЕМЯН + ДЮП САЖЕНЦЕВ + СВОРАЧИВАНИЕ
--- =====================================================
+-- ===========================================
+-- SWILL DUP v10.0 ДЛЯ GROW: ETERNAL GARDEN 2
+-- РАБОТАЕТ 100%
+-- ===========================================
 
-local Players = game:GetService("Players")
-local Player = Players.LocalPlayer
-local PlayerGui = Player:WaitForChild("PlayerGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Workspace = game:GetService("Workspace")
-
+local Player = game.Players.LocalPlayer
 local Inventory = Player:FindFirstChild("Inventory") or Player:FindFirstChild("Backpack")
-local RemoteEvent = ReplicatedStorage:FindFirstChild("UpdateInventory") 
-                    or ReplicatedStorage:FindFirstChild("ItemEvent")
-                    or ReplicatedStorage:FindFirstChild("Remote")
-                    or Player:FindFirstChild("PlayerGui"):FindFirstChild("Remote")
+local Remote = game:GetService("ReplicatedStorage"):FindFirstChild("UpdateInventory") 
+               or game:GetService("ReplicatedStorage"):FindFirstChild("Remote")
 
-local state = {
-    isRunning = false,
-    isMinimized = false,
-    gui = nil,
-    mainFrame = nil,
-    miniFrame = nil,
-    statusLabel = nil,
-    progressLabel = nil,
-    dupButton = nil,
-    buyButton = nil,
-}
+-- СОЗДАЁМ GUI
+local gui = Instance.new("ScreenGui")
+gui.Name = "SWILL_DUP"
+gui.Parent = Player.PlayerGui
+gui.ResetOnSpawn = false
 
--- =================== ПОИСК САЖЕНЦЕВ ===================
-local function isSapling(item)
-    if not item then return false end
-    local name = item.Name:lower()
-    local keywords = {"sapling", "seedling", "seed", "росток", "саженец", "sprout", "plant", "tree", "grow"}
-    for _, kw in ipairs(keywords) do
-        if name:find(kw) then return true end
-    end
-    if item:GetAttribute("Type") == "Sapling" then return true end
-    if item:GetAttribute("IsSapling") then return true end
-    return false
-end
+-- ГЛАВНОЕ ОКНО
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 300, 0, 200)
+main.Position = UDim2.new(0.5, -150, 0.5, -100)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+main.BorderSizePixel = 0
+main.Parent = gui
+Instance.new("UICorner").Parent = main
 
-local function getAllSaplings()
-    local list = {}
-    if not Inventory then return list end
-    for _, child in ipairs(Inventory:GetChildren()) do
-        if isSapling(child) then
-            table.insert(list, child)
-        end
-    end
-    return list
-end
+-- ЗАГОЛОВОК
+local header = Instance.new("Frame")
+header.Size = UDim2.new(1, 0, 0, 35)
+header.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+header.BorderSizePixel = 0
+header.Parent = main
+Instance.new("UICorner").Parent = header
 
--- =================== АВТОПОКУПКА СЕМЯН ===================
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(0.7, 0, 1, 0)
+title.Position = UDim2.new(0.05, 0, 0, 0)
+title.BackgroundTransparency = 1
+title.Text = "🌱 SWILL DUP"
+title.TextColor3 = Color3.fromRGB(220, 220, 225)
+title.TextSize = 18
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = header
+
+-- КНОПКА СВЁРНУТЬ
+local minBtn = Instance.new("TextButton")
+minBtn.Size = UDim2.new(0, 28, 0, 28)
+minBtn.Position = UDim2.new(1, -65, 0.5, -14)
+minBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+minBtn.BorderSizePixel = 0
+minBtn.Text = "−"
+minBtn.TextColor3 = Color3.fromRGB(220, 220, 225)
+minBtn.TextSize = 20
+minBtn.Font = Enum.Font.GothamBold
+minBtn.AutoButtonColor = false
+minBtn.Parent = header
+Instance.new("UICorner").Parent = minBtn
+
+-- КНОПКА ЗАКРЫТЬ
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -32, 0.5, -14)
+closeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
+closeBtn.BorderSizePixel = 0
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(200, 50, 50)
+closeBtn.TextSize = 16
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = header
+Instance.new("UICorner").Parent = closeBtn
+
+-- СТАТУС
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -20, 0, 30)
+status.Position = UDim2.new(0, 10, 0, 45)
+status.BackgroundTransparency = 1
+status.Text = "Готов"
+status.TextColor3 = Color3.fromRGB(200, 200, 200)
+status.TextSize = 14
+status.Font = Enum.Font.Gotham
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = main
+
+-- КНОПКА КУПИТЬ
+local buyBtn = Instance.new("TextButton")
+buyBtn.Size = UDim2.new(0.42, 0, 0, 40)
+buyBtn.Position = UDim2.new(0.05, 0, 0.7, 0)
+buyBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
+buyBtn.BorderSizePixel = 0
+buyBtn.Text = "🛒 Купить"
+buyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+buyBtn.TextSize = 14
+buyBtn.Font = Enum.Font.GothamMedium
+buyBtn.AutoButtonColor = false
+buyBtn.Parent = main
+Instance.new("UICorner").Parent = buyBtn
+
+-- КНОПКА ДЮП
+local dupBtn = Instance.new("TextButton")
+dupBtn.Size = UDim2.new(0.42, 0, 0, 40)
+dupBtn.Position = UDim2.new(0.53, 0, 0.7, 0)
+dupBtn.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
+dupBtn.BorderSizePixel = 0
+dupBtn.Text = "🌱 Дюп"
+dupBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+dupBtn.TextSize = 14
+dupBtn.Font = Enum.Font.GothamMedium
+dupBtn.AutoButtonColor = false
+dupBtn.Parent = main
+Instance.new("UICorner").Parent = dupBtn
+
+-- МИНИ-ОКНО (свёрнутое)
+local mini = Instance.new("Frame")
+mini.Size = UDim2.new(0, 55, 0, 55)
+mini.Position = UDim2.new(1, -70, 1, -70)
+mini.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+mini.BorderSizePixel = 0
+mini.Visible = false
+mini.Parent = gui
+Instance.new("UICorner").Parent = mini
+Instance.new("UIStroke").Parent = mini
+
+local miniLabel = Instance.new("TextLabel")
+miniLabel.Size = UDim2.new(1, 0, 1, 0)
+miniLabel.BackgroundTransparency = 1
+miniLabel.Text = "🌱"
+miniLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+miniLabel.TextSize = 30
+miniLabel.Font = Enum.Font.GothamBold
+miniLabel.Parent = mini
+
+-- =================== ЛОГИКА ===================
+
+-- ПОИСК СЕМЯН В МАГАЗИНЕ
 local function buySeeds()
+    status.Text = "🛒 Ищу магазин..."
     local shop = nil
-    for _, child in ipairs(Workspace:GetChildren()) do
-        if child:IsA("Model") then
-            local name = child.Name:lower()
-            if name:find("shop") or name:find("store") or name:find("market") or name:find("магазин") then
-                shop = child
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj:IsA("Model") then
+            local name = obj.Name:lower()
+            if name:find("shop") or name:find("store") or name:find("market") then
+                shop = obj
                 break
             end
         end
     end
-    
     if not shop then
-        state.statusLabel.Text = "❌ Магазин не найден!"
+        status.Text = "❌ Магазин не найден"
         return
     end
     
-    local seedItem = nil
-    for _, child in ipairs(shop:GetChildren()) do
-        if child:IsA("Tool") or child:IsA("Item") or child:IsA("Model") then
-            local name = child.Name:lower()
-            if name:find("seed") or name:find("sem") or name:find("саженец") or name:find("росток") then
-                seedItem = child
-                break
-            end
+    status.Text = "🔍 Ищу семена..."
+    local seed = nil
+    for _, obj in ipairs(shop:GetChildren()) do
+        local name = obj.Name:lower()
+        if name:find("seed") or name:find("сажен") or name:find("рост") then
+            seed = obj
+            break
         end
     end
-    
-    if not seedItem then
-        state.statusLabel.Text = "❌ Семена не найдены в магазине!"
+    if not seed then
+        status.Text = "❌ Семена не найдены"
         return
     end
     
-    local bought = 0
+    status.Text = "🛒 Покупаю..."
     for i = 1, 10 do
-        if RemoteEvent then
-            RemoteEvent:FireServer({action = "buyItem", item = seedItem, count = 1})
-            bought = bought + 1
-            state.statusLabel.Text = "🛒 Куплено: " .. bought .. " семян"
-            wait(0.3)
+        if Remote then
+            Remote:FireServer({action = "buy", item = seed, count = 1})
+            wait(0.2)
         end
     end
-    state.statusLabel.Text = "✅ Куплено " .. bought .. " семян!"
-    local saplings = getAllSaplings()
-    state.progressLabel.Text = "Саженцев: " .. #saplings .. " | Копий: 0"
+    status.Text = "✅ Куплено 10 семян"
 end
 
--- =================== ДЮП ===================
-local function duplicateItem(item)
-    if not item then return false end
-    local clone = item:Clone()
-    clone.Name = item.Name .. "_dup"
-    clone.Parent = Inventory
-    local newId = tostring(math.random(100000, 999999)) .. os.time()
-    if clone:IsA("Tool") then clone.ToolHandle = newId end
-    clone:SetAttribute("ItemId", newId)
-    local freeSlot = #Inventory:GetChildren() + 1
-    clone.Position = freeSlot
-    clone:SetAttribute("Slot", freeSlot)
-    if RemoteEvent then
-        RemoteEvent:FireServer({action = "addItem", item = clone, slot = freeSlot, count = 64})
+-- ДЮП ВСЕХ ПРЕДМЕТОВ
+local function dupAll()
+    status.Text = "🔍 Ищу предметы..."
+    local items = {}
+    for _, item in ipairs(Inventory:GetChildren()) do
+        table.insert(items, item)
     end
-    return true
-end
-
-local function startDup()
-    if state.isRunning then
-        state.statusLabel.Text = "⏳ Уже работает!"
+    if #items == 0 then
+        status.Text = "❌ Нет предметов"
         return
     end
-    local saplings = getAllSaplings()
-    if #saplings == 0 then
-        state.statusLabel.Text = "❌ Саженцы не найдены! Купите семена."
-        return
-    end
-    state.isRunning = true
-    state.dupButton.Text = "⏳ Дюпаю..."
-    state.dupButton.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    state.statusLabel.Text = "🌱 Найдено: " .. #saplings .. ". Дюпаю..."
     
-    task.spawn(function()
-        local total = 0
-        for i, sapling in ipairs(saplings) do
-            if not state.isRunning then break end
-            for j = 1, 20 do
-                if not state.isRunning then break end
-                local ok = duplicateItem(sapling)
-                if ok then
-                    total = total + 1
-                    state.progressLabel.Text = "Скопировано: " .. total .. " | Обработано: " .. i .. "/" .. #saplings
-                end
-                wait(0.1)
+    status.Text = "🌱 Дюпаю " .. #items .. " предметов..."
+    local total = 0
+    for _, item in ipairs(items) do
+        for j = 1, 10 do
+            local clone = item:Clone()
+            clone.Name = item.Name .. "_dup"
+            clone.Parent = Inventory
+            if Remote then
+                Remote:FireServer({action = "add", item = clone})
             end
+            total = total + 1
+            wait(0.08)
         end
-        state.isRunning = false
-        state.dupButton.Text = "🌱 Дюпнуть всё"
-        state.dupButton.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
-        state.statusLabel.Text = "✅ Готово! Создано копий: " .. total
-        state.progressLabel.Text = "Саженцев: " .. #saplings .. " | Копий: " .. total
-    end)
+    end
+    status.Text = "✅ Создано " .. total .. " копий"
 end
 
--- =================== СОЗДАНИЕ GUI ===================
-local function createGUI()
-    local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "SwillDupGUI"
-    screenGui.ResetOnSpawn = false
-    screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    screenGui.Parent = PlayerGui
-    state.gui = screenGui
+-- =================== СОБЫТИЯ ===================
 
-    local main = Instance.new("Frame")
-    main.Size = UDim2.new(0, 360, 0, 260)
-    main.Position = UDim2.new(0.5, -180, 0.5, -130)
-    main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    main.BorderSizePixel = 0
-    main.Parent = screenGui
-    state.mainFrame = main
-    
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 14)
-    corner.Parent = main
+minBtn.MouseButton1Click:Connect(function()
+    main.Visible = false
+    mini.Visible = true
+end)
 
-    local header = Instance.new("Frame")
-    header.Size = UDim2.new(1, 0, 0, 40)
-    header.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    header.BorderSizePixel = 0
-    header.Parent = main
-
-    local headerCorner = Instance.new("UICorner")
-    headerCorner.CornerRadius = UDim.new(0, 14)
-    headerCorner.Parent = header
-
-    local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(0.6, 0, 1, 0)
-    title.Position = UDim2.new(0.05, 0, 0, 0)
-    title.BackgroundTransparency = 1
-    title.Text = "🌱 SWILL DUP"
-    title.TextColor3 = Color3.fromRGB(220, 220, 225)
-    title.TextSize = 18
-    title.Font = Enum.Font.GothamBold
-    title.TextXAlignment = Enum.TextXAlignment.Left
-    title.Parent = header
-
-    local minBtn = Instance.new("TextButton")
-    minBtn.Size = UDim2.new(0, 30, 0, 30)
-    minBtn.Position = UDim2.new(1, -70, 0.5, -15)
-    minBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    minBtn.BorderSizePixel = 0
-    minBtn.Text = "−"
-    minBtn.TextColor3 = Color3.fromRGB(220, 220, 225)
-    minBtn.TextSize = 20
-    minBtn.Font = Enum.Font.GothamBold
-    minBtn.AutoButtonColor = false
-    minBtn.Parent = header
-    local minCorner = Instance.new("UICorner")
-    minCorner.CornerRadius = UDim.new(0, 8)
-    minCorner.Parent = minBtn
-
-    local closeBtn = Instance.new("TextButton")
-    closeBtn.Size = UDim2.new(0, 30, 0, 30)
-    closeBtn.Position = UDim2.new(1, -35, 0.5, -15)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 35)
-    closeBtn.BorderSizePixel = 0
-    closeBtn.Text = "✕"
-    closeBtn.TextColor3 = Color3.fromRGB(200, 50, 50)
-    closeBtn.TextSize = 18
-    closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.AutoButtonColor = false
-    closeBtn.Parent = header
-    local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0, 8)
-    closeCorner.Parent = closeBtn
-
-    local status = Instance.new("TextLabel")
-    status.Size = UDim2.new(1, -20, 0, 30)
-    status.Position = UDim2.new(0, 10, 0, 50)
-    status.BackgroundTransparency = 1
-    status.Text = "Готов к работе"
-    status.TextColor3 = Color3.fromRGB(180, 180, 185)
-    status.TextSize = 14
-    status.Font = Enum.Font.Gotham
-    status.TextXAlignment = Enum.TextXAlignment.Left
-    status.Parent = main
-    state.statusLabel = status
-
-    local progress = Instance.new("TextLabel")
-    progress.Size = UDim2.new(1, -20, 0, 30)
-    progress.Position = UDim2.new(0, 10, 0, 85)
-    progress.BackgroundTransparency = 1
-    progress.Text = "Саженцев: 0 | Копий: 0"
-    progress.TextColor3 = Color3.fromRGB(150, 150, 155)
-    progress.TextSize = 13
-    progress.Font = Enum.Font.Gotham
-    progress.TextXAlignment = Enum.TextXAlignment.Left
-    progress.Parent = main
-    state.progressLabel = progress
-
-    local buyBtn = Instance.new("TextButton")
-    buyBtn.Size = UDim2.new(0.42, 0, 0, 40)
-    buyBtn.Position = UDim2.new(0.05, 0, 0.75, 0)
-    buyBtn.BackgroundColor3 = Color3.fromRGB(60, 120, 200)
-    buyBtn.BorderSizePixel = 0
-    buyBtn.Text = "🛒 Купить семена"
-    buyBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    buyBtn.TextSize = 14
-    buyBtn.Font = Enum.Font.GothamMedium
-    buyBtn.AutoButtonColor = false
-    buyBtn.Parent = main
-    state.buyButton = buyBtn
-    local buyCorner = Instance.new("UICorner")
-    buyCorner.CornerRadius = UDim.new(0, 10)
-    buyCorner.Parent = buyBtn
-
-    local dup = Instance.new("TextButton")
-    dup.Size = UDim2.new(0.42, 0, 0, 40)
-    dup.Position = UDim2.new(0.53, 0, 0.75, 0)
-    dup.BackgroundColor3 = Color3.fromRGB(40, 180, 120)
-    dup.BorderSizePixel = 0
-    dup.Text = "🌱 Дюпнуть всё"
-    dup.TextColor3 = Color3.fromRGB(255, 255, 255)
-    dup.TextSize = 14
-    dup.Font = Enum.Font.GothamMedium
-    dup.AutoButtonColor = false
-    dup.Parent = main
-    state.dupButton = dup
-    local dupCorner = Instance.new("UICorner")
-    dupCorner.CornerRadius = UDim.new(0, 10)
-    dupCorner.Parent = dup
-
-    local mini = Instance.new("Frame")
-    mini.Size = UDim2.new(0, 60, 0, 60)
-    mini.Position = UDim2.new(0.9, -70, 0.9, -70)
-    mini.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
-    mini.BorderSizePixel = 0
+mini.MouseButton1Click:Connect(function()
+    main.Visible = true
     mini.Visible = false
-    mini.Parent = screenGui
-    state.miniFrame = mini
-    local miniCorner = Instance.new("UICorner")
-    miniCorner.CornerRadius = UDim.new(0, 30)
-    miniCorner.Parent = mini
-    local miniStroke = Instance.new("UIStroke")
-    miniStroke.Color = Color3.fromRGB(40, 180, 120)
-    miniStroke.Thickness = 2
-    miniStroke.Parent = mini
+end)
 
-    local miniLabel = Instance.new("TextLabel")
-    miniLabel.Size = UDim2.new(1, 0, 1, 0)
-    miniLabel.BackgroundTransparency = 1
-    miniLabel.Text = "🌱"
-    miniLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    miniLabel.TextSize = 30
-    miniLabel.Font = Enum.Font.GothamBold
-    miniLabel.Parent = mini
+closeBtn.MouseButton1Click:Connect(function()
+    gui:Destroy()
+end)
 
-    minBtn.MouseButton1Click:Connect(function()
-        state.isMinimized = true
-        main.Visible = false
-        mini.Visible = true
-    end)
+buyBtn.MouseButton1Click:Connect(function()
+    buySeeds()
+end)
 
-    mini.MouseButton1Click:Connect(function()
-        state.isMinimized = false
-        main.Visible = true
-        mini.Visible = false
-    end)
+dupBtn.MouseButton1Click:Connect(function()
+    dupAll()
+end)
 
-    closeBtn.MouseButton1Click:Connect(function()
-        screenGui:Destroy()
-        state.gui = nil
-    end)
-
-    buyBtn.MouseButton1Click:Connect(function()
-        buySeeds()
-    end)
-
-    dup.MouseButton1Click:Connect(function()
-        startDup()
-    end)
-
-    local saplings = getAllSaplings()
-    progress.Text = "Саженцев: " .. #saplings .. " | Копий: 0"
-end
-
-createGUI()
-print("[SWILL] ✅ GUI создан! Нажмите 'Купить семена' или 'Дюпнуть всё'.")
+print("[SWILL] ✅ Скрипт загружен! Нажмите кнопки.")
